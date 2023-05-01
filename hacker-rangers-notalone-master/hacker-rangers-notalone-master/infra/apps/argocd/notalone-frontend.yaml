@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notalone-frontend
+spec:
+  destination:
+    name: ''
+    namespace: notalone
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: infra/apps/notalone-frontend
+    repoURL: 'git@bitbucket.org:ArtyomKoshko/notalone.git'
+    targetRevision: master
+    helm:
+      valueFiles:
+        - values.production.yaml
+  project: notalone
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false

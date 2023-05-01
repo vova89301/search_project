@@ -1,0 +1,40 @@
+<router-outlet *ngIf="isLanding$ | async; else portal"></router-outlet>
+<ng-template #portal>
+  <mui-main>
+    <ng-container ngProjectAs="muiHeader">
+      <a
+        tuiLink
+        tuiMode="onLight"
+        href="https://github.com/"
+        target="_blank"
+        class="app-link"
+      >
+        <img
+          src="assets/images/github.svg"
+          alt=""
+          class="app-github"
+        />
+        GitHub
+      </a>
+    </ng-container>
+    <mui-language-switcher
+      tuiTextfieldSize="m"
+      ngProjectAs="muiNavigation"
+      class="language-switcher"
+    >
+      Language of components
+    </mui-language-switcher>
+    <mui-version-manager
+      tuiTextfieldSize="m"
+      ngProjectAs="muiNavigation"
+      class="app-version"
+    >
+      Version
+    </mui-version-manager>
+    <tui-sheets-host ngProjectAs="tuiOverContent"></tui-sheets-host>
+    <mui-custom-host ngProjectAs="tuiOverContent"></mui-custom-host>
+    <tui-table-bars-host ngProjectAs="tuiOverAlerts"></tui-table-bars-host>
+    <tui-theme-android *ngIf="isAndroid"></tui-theme-android>
+    <tui-theme-ios *ngIf="isIos"></tui-theme-ios>
+  </mui-main>
+</ng-template>

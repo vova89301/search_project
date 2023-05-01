@@ -1,0 +1,23 @@
+<button
+    tuiIconButton
+    icon="tuiIconMenuLarge"
+    appearance="icon"
+    class="m-menu"
+    [title]="menu"
+    (click)="onClick()"
+    (tuiActiveZoneChange)="onActiveZone($event)"
+>
+    <mui-navigation
+        *tuiSidebar="!!(open$ | async)"
+        class="m-navigation"
+    ></mui-navigation>
+</button>
+<div class="m-logo">
+    <img
+        *polymorpheusOutlet="logo as src"
+        alt="Logo"
+        class="m-img"
+        [src]="src"
+    />
+</div>
+<ng-content></ng-content>

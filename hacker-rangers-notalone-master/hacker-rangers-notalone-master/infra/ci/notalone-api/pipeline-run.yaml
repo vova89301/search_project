@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: tekton-api-pipelinerun-
+  namespace: tekton-pipelines
+spec:
+  pipelineRef:
+    name: notalone-api-pipeline
+  params:
+    - name: gitUrl
+      value: git@bitbucket.org:ArtyomKoshko/notalone.git
+    - name: infraGitUrl
+      value: git@bitbucket.org:ArtyomKoshko/notalone.git
+    - name: branchName
+      value: master
+    - name: infraBranchName
+      value: master
+    - name: imageUrl
+      value: registry.nakodeelee.ru/notalone/api
+    - name: imageTag
+      value: v0.0.1
+    - name: pathToContext
+      value: '/backend/Notalone.API'
+  serviceAccountName: notalone-pipeline-account
+  workspaces:
+    - name: git-source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce # access mode may affect how you can use this volume in parallel tasks
+          resources:
+            requests:
+              storage: 1Gi
+    - name: git-infra-source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce # access mode may affect how you can use this volume in parallel tasks
+          resources:
+            requests:
+              storage: 100Mi
+    - name: ssh-creds
+      secret:
+        secretName: bitbucket-ssh-creds-secret
+    - name: ssh-w-creds
+      secret:
+        secretName: bitbucket-ssh-w-creds-secret
+    - name: dockerconfig
+      secret:
+        secretName: nakodeelee-reg-cred

@@ -1,0 +1,203 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: notalone-pipeline-listener
+  namespace: tekton-pipelines
+spec:
+  serviceAccountName: notalone-pipeline-trigger-sa
+  triggers:
+    - name: notalone-frontend-pipeline-trigger
+      # Bitbucket event payload description
+      # https://support.atlassian.com/bitbucket-cloud/docs/event-payloads/
+      # Expressions tutorial
+      # https://tekton.dev/vault/triggers-v0.6.1/cel_expressions/#list-of-extensions
+      interceptors:
+        - cel:
+            filter: "body.pullrequest.state.contains('MERGED') && body.pullrequest.source.repository.name.contains('notalone')"
+            overlays:
+              - key: webhook_uuid
+                expression: "header.canonical('X-Hook-UUID')"
+              - key: truncated_commit_sha
+                expression: "body.pullrequest.merge_commit.hash.truncate(7)"
+              - key: commit_date
+                expression: "body.pullrequest.updated_on.truncate(10)"
+      bindings:
+        - ref: notalone-frontend-pipeline-binding
+      template:
+        ref: notalone-frontend-pipeline-template
+    - name: notalone-api-pipeline-trigger
+      interceptors:
+        - cel:
+            filter: "body.pullrequest.state.contains('MERGED') && body.pullrequest.source.repository.name.contains('notalone')"
+            overlays:
+              - key: webhook_uuid
+                expression: "header.canonical('X-Hook-UUID')"
+              - key: truncated_commit_sha
+                expression: "body.pullrequest.merge_commit.hash.truncate(7)"
+              - key: commit_date
+                expression: "body.pullrequest.updated_on.truncate(10)"
+      bindings:
+        - ref: notalone-api-pipeline-binding
+      template:
+        ref: notalone-api-pipeline-template
+
+# Client fronted app
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: notalone-frontend-pipeline-binding
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      value: $(extensions.truncated_commit_sha)
+    - name: git-repository-url
+      value: $(body.repository.links.html.href)
+    - name: commit-date
+      value: $(extensions.commit_date)
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: notalone-frontend-pipeline-template
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      description: The git revision
+      default: master
+    - name: git-repository-url
+      description: The git repository url
+    - name: commit-date
+      description: commit date
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: triggered-notalone-frontend-pipelinerun-
+      spec:
+        pipelineRef:
+          name: notalone-frontend-pipeline
+        params:
+          - name: gitUrl
+            value: git@bitbucket.org:ArtyomKoshko/notalone.git
+          - name: infraGitUrl
+            value: git@bitbucket.org:ArtyomKoshko/notalone.git
+          - name: branchName
+            value: master
+          - name: infraBranchName
+            value: master
+          - name: imageUrl
+            value: registry.nakodeelee.ru/notalone/frontend
+          - name: imageTag
+            value: v0.0.1-$(tt.params.commit-date)-$(tt.params.git-revision)
+          - name: pathToContext
+            value: "/frontend"
+        serviceAccountName: notalone-pipeline-account
+        workspaces:
+          - name: git-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+          - name: git-infra-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 100Mi
+          - name: ssh-creds
+            secret:
+              secretName: bitbucket-ssh-creds-secret
+          - name: ssh-w-creds
+            secret:
+              secretName: bitbucket-ssh-w-creds-secret
+          - name: dockerconfig
+            secret:
+              secretName: nakodeelee-reg-cred
+---
+# API
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: notalone-api-pipeline-binding
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      value: $(extensions.truncated_commit_sha)
+    - name: git-repository-url
+      value: $(body.repository.links.html.href)
+    - name: commit-date
+      value: $(extensions.commit_date)
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: notalone-api-pipeline-template
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      description: The git revision
+      default: master
+    - name: git-repository-url
+      description: The git repository url
+    - name: commit-date
+      description: commit date
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: triggered-notalone-api-pipelinerun-
+      spec:
+        pipelineRef:
+          name: notalone-api-pipeline
+        params:
+          - name: gitUrl
+            value: git@bitbucket.org:ArtyomKoshko/notalone.git
+          - name: infraGitUrl
+            value: git@bitbucket.org:ArtyomKoshko/notalone.git
+          - name: branchName
+            value: master
+          - name: infraBranchName
+            value: master
+          - name: imageUrl
+            value: registry.nakodeelee.ru/notalone/api
+          - name: imageTag
+            value: v0.0.1-$(tt.params.commit-date)-$(tt.params.git-revision)
+          - name: pathToContext
+            value: "/backend/Notalone.API"
+        serviceAccountName: notalone-pipeline-account
+        workspaces:
+          - name: git-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+          - name: git-infra-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 100Mi
+          - name: ssh-creds
+            secret:
+              secretName: bitbucket-ssh-creds-secret
+          - name: ssh-w-creds
+            secret:
+              secretName: bitbucket-ssh-w-creds-secret
+          - name: dockerconfig
+            secret:
+              secretName: nakodeelee-reg-cred

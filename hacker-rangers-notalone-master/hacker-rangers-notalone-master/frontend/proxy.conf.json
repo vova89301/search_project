@@ -1,0 +1,14 @@
+{
+  "/projects": {
+    "target": "https://backend.nakodeelee.ru",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/users": {
+    "target": "https://backend.nakodeelee.ru",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

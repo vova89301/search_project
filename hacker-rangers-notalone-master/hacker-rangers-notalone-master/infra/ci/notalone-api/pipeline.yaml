@@ -1,0 +1,145 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: notalone-api-pipeline
+  namespace: tekton-pipelines
+spec:
+  workspaces:
+    - name: git-source
+      description: The git repo
+    - name: git-infra-source
+      description: The infrastructure git repo
+    - name: ssh-creds
+      description: The git repo ssh auth
+    - name: ssh-w-creds
+      description: The infrastructure git repo ssh auth
+    - name: dockerconfig
+      description: The private registry config file
+  params:
+    - name: gitUrl
+      description: Git repository url
+    - name: branchName
+      description: App source repository branch to build an app
+      default: 'develop'
+    - name: infraGitUrl
+      description: Infrastructure git repository url
+    - name: infraBranchName
+      description: App infra source repository branch to apply CD changes
+      default: 'master'
+    - name: pathToContext
+      description: The path to the build context, used by Kaniko - within the workspace
+      default: '/backend/Notalone.API'
+    - name: imageUrl
+      description: Image name including repository
+    - name: imageTag
+      description: Image tag
+      default: "latest"
+
+  tasks:
+
+    - name: clone-repo
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: git-source
+        - name: ssh-directory
+          workspace: ssh-creds
+      params:
+        - name: url
+          value: "$(params.gitUrl)"
+        - name: subdirectory
+          value: "."
+        - name: revision
+          value: $(params.branchName)
+        - name: deleteExisting
+          value: "true"
+
+    - name: dotnet-test
+      taskRef:
+        name: dotnet-test
+      runAfter:
+        - clone-repo
+      workspaces:
+        - name: source
+          workspace: git-source
+      params:
+        - name: subdirectory
+          value: $(params.pathToContext)
+        - name: dotnet-image
+          value: mcr.microsoft.com/dotnet/sdk:6.0
+
+    - name: build-and-push-image
+      taskRef:
+        name: kaniko
+      runAfter:
+        - clone-repo
+        - dotnet-test
+      workspaces:
+        - name: source
+          workspace: git-source
+        - name: dockerconfig
+          workspace: dockerconfig
+      params:
+        - name: CONTEXT
+          value: $(params.pathToContext)
+        - name: IMAGE
+          value: $(params.imageUrl):$(params.imageTag)
+
+    - name: clone-infra-repo
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: git-infra-source
+        - name: ssh-directory
+          workspace: ssh-w-creds
+      params:
+        - name: url
+          value: "$(params.infraGitUrl)"
+        - name: subdirectory
+          value: "."
+        - name: deleteExisting
+          value: "true"
+
+    - name: update-cd-image-tag
+      taskRef:
+        name: yq
+      runAfter:
+        - clone-infra-repo
+        - build-and-push-image
+      workspaces:
+        - name: source
+          workspace: git-infra-source
+      params:
+        - name: files
+          value:
+          - "./infra/apps/notalone-api/values.production.yaml"
+          - "./infra/apps/notalone-api/values.modified.yaml"
+        - name: expression
+          value: .api.image.tag = \""$(params.imageTag)"\"
+
+    - name: push-infra-updates
+      taskRef:
+        name: git-cli
+      runAfter:
+        - clone-infra-repo
+        - build-and-push-image
+        - update-cd-image-tag
+      workspaces:
+        - name: source
+          workspace: git-infra-source
+        - name: ssh-directory
+          workspace: ssh-w-creds
+      params:
+        - name: GIT_USER_NAME
+          value: ArtyomKoshko
+        - name: GIT_USER_EMAIL
+          value: artyomkoshko@gmail.com
+        - name: GIT_SCRIPT
+          value: |
+            git fetch origin
+            git checkout $(params.infraBranchName)
+            git add .
+            git commit -m "feat: image tag update $(params.imageUrl):$(params.imageTag)"
+            git push

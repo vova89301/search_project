@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notalone-pipeline-account
+  namespace: tekton-pipelines
+secrets:
+- name: nakodeelee-reg-cred
+- name: bitbucket-ssh-creds-secret
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kube-api-secret
+  namespace: tekton-pipelines
+  annotations:
+    kubernetes.io/service-account.name: notalone-pipeline-account
+type: kubernetes.io/service-account-token
+
+---
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: notalone-pipeline-role
+  namespace: tekton-pipelines
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "create", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "create", "update", "patch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notalone-pipeline-role-binding
+  namespace: tekton-pipelines
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: notalone-pipeline-role
+subjects:
+- kind: ServiceAccount
+  name: notalone-pipeline-account
